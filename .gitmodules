@@ -1,0 +1,3 @@
+[submodule "nanai-gna"]
+	path = nanai-gna
+	url = https://github.com/nanaisisi/nanai-gna
