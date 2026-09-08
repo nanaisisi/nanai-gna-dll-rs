@@ -63,6 +63,29 @@ impl GnaDevice {
         Self::open(library, 0)
     }
 
+    /// Create and initialize a GNA software device for model export.
+    pub fn create_for_export(
+        library: &GnaLibrary,
+        target_device_version: Gna2DeviceVersion,
+    ) -> Result<Self> {
+        let create_fn = library
+            .symbols()
+            .device_create_for_export
+            .ok_or_else(|| GnaError::Other("Gna2DeviceCreateForExport is not supported".into()))?;
+
+        let mut device_index: u32 = 0;
+        let status = unsafe { create_fn(target_device_version, &mut device_index) };
+        if status != GNA2_STATUS_SUCCESS {
+            return Err(GnaError::from_status(status));
+        }
+
+        Ok(Self {
+            library: library.clone(),
+            index: device_index,
+            version: target_device_version,
+        })
+    }
+
     /// Set number of worker threads for this device.
     pub fn set_number_of_threads(&self, threads: u32) -> Result<()> {
         let set_threads_fn = self

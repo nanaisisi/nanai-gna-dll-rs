@@ -59,6 +59,50 @@ impl GnaRequestConfig {
         Ok(())
     }
 
+    /// Enable active outputs list for an operation operand.
+    pub fn enable_active_list(&mut self, operation_index: u32, indices: &[u32]) -> Result<()> {
+        let enable_list_fn = self
+            .library
+            .symbols()
+            .request_config_enable_active_list
+            .ok_or_else(|| {
+                GnaError::Other("Gna2RequestConfigEnableActiveList not supported".into())
+            })?;
+
+        let status = unsafe {
+            enable_list_fn(
+                self.config_id,
+                operation_index,
+                indices.len() as u32,
+                indices.as_ptr(),
+            )
+        };
+        if status != GNA2_STATUS_SUCCESS {
+            return Err(GnaError::from_status(status));
+        }
+        Ok(())
+    }
+
+    /// Enable hardware consistency for the request configuration.
+    pub fn enable_hardware_consistency(
+        &mut self,
+        device_version: crate::types::Gna2DeviceVersion,
+    ) -> Result<()> {
+        let consistency_fn = self
+            .library
+            .symbols()
+            .request_config_enable_hardware_consistency
+            .ok_or_else(|| {
+                GnaError::Other("Gna2RequestConfigEnableHardwareConsistency not supported".into())
+            })?;
+
+        let status = unsafe { consistency_fn(self.config_id, device_version) };
+        if status != GNA2_STATUS_SUCCESS {
+            return Err(GnaError::from_status(status));
+        }
+        Ok(())
+    }
+
     /// Set acceleration mode.
     pub fn set_acceleration_mode(&mut self, mode: Gna2AccelerationMode) -> Result<()> {
         let set_mode_fn = self

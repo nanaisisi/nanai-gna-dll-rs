@@ -32,6 +32,18 @@ pub enum GnaError {
     #[error("Invalid buffer size requested: {0}")]
     InvalidBufferSize(usize),
 
+    #[error("Environment variable '{0}' is not set")]
+    EnvVarNotSet(String),
+
+    #[error("Library file not found at path: {0}")]
+    LibraryPathNotFound(std::path::PathBuf),
+
+    #[error("Could not find or load GNA library. Locations tried: {tried:?}. Last error: {last_error:?}")]
+    LibrarySearchFailed {
+        tried: Vec<std::path::PathBuf>,
+        last_error: Option<String>,
+    },
+
     #[error("Operation error: {0}")]
     Other(String),
 }

@@ -3,31 +3,75 @@ use std::path::PathBuf;
 
 use nanai_gna_dll_rs::{GnaDevice, GnaLibrary};
 
+fn print_usage(program: &str) {
+    println!("Usage: {} [OPTIONS]", program);
+    println!();
+    println!("Options:");
+    println!("  --dll <PATH>       Load DLL directly from specified file or directory path");
+    println!("  --env <VAR_NAME>   Load DLL from specified environment variable");
+    println!("  --help, -h         Show this help message");
+    println!();
+    println!("If no option is specified, standard search order is used:");
+    println!("  1. GNA_LIB_PATH environment variable");
+    println!("  2. GNA_LIB_DIR environment variable");
+    println!("  3. Current directory ({})", GnaLibrary::default_dll_name());
+    println!("  4. System library search path");
+}
+
 fn main() {
     println!("==================================================");
     println!("  nanai-gna-dll-rs: GNA Dynamic DLL Loader Demo   ");
     println!("==================================================");
 
-    let mut args = env::args().skip(1);
-    let dll_path = if let Some(flag) = args.next() {
-        if flag == "--dll" {
-            args.next().map(PathBuf::from)
-        } else {
-            Some(PathBuf::from(flag))
-        }
-    } else {
-        None
-    };
+    let mut args = env::args();
+    let program = args.next().unwrap_or_else(|| "nanai-gna-dll-rs".into());
 
-    let library = match dll_path {
-        Some(path) => {
-            println!("Attempting to load DLL from specified path: {}", path.display());
-            GnaLibrary::load_from_path(path)
+    let mut dll_path: Option<PathBuf> = None;
+    let mut env_var: Option<String> = None;
+
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--dll" => {
+                if let Some(val) = args.next() {
+                    dll_path = Some(PathBuf::from(val));
+                } else {
+                    eprintln!("Error: --dll requires a path argument.");
+                    return;
+                }
+            }
+            "--env" => {
+                if let Some(val) = args.next() {
+                    env_var = Some(val);
+                } else {
+                    eprintln!("Error: --env requires an environment variable name.");
+                    return;
+                }
+            }
+            "--help" | "-h" => {
+                print_usage(&program);
+                return;
+            }
+            other if other.starts_with('-') => {
+                eprintln!("Unknown option: {}", other);
+                print_usage(&program);
+                return;
+            }
+            positional => {
+                // Allow passing the DLL path directly as a positional argument
+                dll_path = Some(PathBuf::from(positional));
+            }
         }
-        None => {
-            println!("Attempting to load default DLL (gna.dll) from environment / system path...");
-            GnaLibrary::load_default()
-        }
+    }
+
+    let library = if let Some(path) = dll_path {
+        println!("Attempting to load DLL from specified path: {}", path.display());
+        GnaLibrary::load_from_path(path)
+    } else if let Some(var) = env_var {
+        println!("Attempting to load DLL from environment variable: {}", var);
+        GnaLibrary::load_from_env(&var)
+    } else {
+        println!("Attempting to load default DLL ({}) from environment / system path...", GnaLibrary::default_dll_name());
+        GnaLibrary::load_default()
     };
 
     let library = match library {
@@ -37,9 +81,10 @@ fn main() {
         }
         Err(err) => {
             eprintln!("\nDLL could not be loaded: {}", err);
-            eprintln!("\nHint: You can specify a DLL path via command line argument:");
-            eprintln!("  cargo run -- --dll path/to/gna.dll");
-            eprintln!("Or set the GNA_LIB_PATH environment variable.");
+            eprintln!("\nHint:");
+            eprintln!("  1. Specify a DLL path: cargo run -- --dll path/to/{}", GnaLibrary::default_dll_name());
+            eprintln!("  2. Or specify an environment variable: cargo run -- --env MY_GNA_PATH");
+            eprintln!("  3. Or set standard GNA_LIB_PATH / GNA_LIB_DIR.");
             return;
         }
     };
