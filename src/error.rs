@@ -44,6 +44,12 @@ pub enum GnaError {
         last_error: Option<String>,
     },
 
+    #[error("GNA model creation failed (status: {status}): {detail}")]
+    ModelCreationError {
+        status: i32,
+        detail: String,
+    },
+
     #[error("Operation error: {0}")]
     Other(String),
 }

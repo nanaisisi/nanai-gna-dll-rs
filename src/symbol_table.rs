@@ -108,6 +108,31 @@ pub type FnGna2ModelExport = unsafe extern "C" fn(
 pub type FnGna2ModelOverrideAlignment =
     unsafe extern "C" fn(new_alignment: u32) -> Gna2Status;
 
+pub type FnGna2ModelCreate = unsafe extern "C" fn(
+    device_index: u32,
+    model: *const crate::types::Gna2Model,
+    model_id: *mut u32,
+) -> Gna2Status;
+pub type FnGna2ModelRelease = unsafe extern "C" fn(model_id: u32) -> Gna2Status;
+pub type FnGna2ModelGetLastError =
+    unsafe extern "C" fn(error: *mut crate::types::Gna2ModelError) -> Gna2Status;
+pub type FnGna2ModelErrorGetMessage = unsafe extern "C" fn(
+    error: *const crate::types::Gna2ModelError,
+    message_buffer: *mut c_char,
+    message_buffer_size: u32,
+) -> Gna2Status;
+pub type FnGna2ModelErrorGetMaxMessageLength = unsafe extern "C" fn() -> u32;
+
+pub type FnGna2OperationInitFullyConnectedAffine = unsafe extern "C" fn(
+    operation: *mut crate::types::Gna2Operation,
+    user_allocator: Gna2UserAllocator,
+    inputs: *mut crate::types::Gna2Tensor,
+    outputs: *mut crate::types::Gna2Tensor,
+    weights: *mut crate::types::Gna2Tensor,
+    biases: *mut crate::types::Gna2Tensor,
+    activation: *mut crate::types::Gna2Tensor,
+) -> Gna2Status;
+
 pub type FnGna2StatusGetMessage =
     unsafe extern "C" fn(status: Gna2Status, buffer: *mut c_char, buffer_size: u32) -> Gna2Status;
 pub type FnGna2StatusGetMaxMessageLength = unsafe extern "C" fn() -> u32;
@@ -127,6 +152,13 @@ pub struct GnaSymbolTable {
     pub memory_alloc_for_device: Option<FnGna2MemoryAllocForDevice>,
     pub memory_free: FnGna2MemoryFree,
     pub memory_set_tag: Option<FnGna2MemorySetTag>,
+
+    pub model_create: Option<FnGna2ModelCreate>,
+    pub model_release: Option<FnGna2ModelRelease>,
+    pub model_get_last_error: Option<FnGna2ModelGetLastError>,
+    pub model_error_get_message: Option<FnGna2ModelErrorGetMessage>,
+    pub model_error_get_max_message_length: Option<FnGna2ModelErrorGetMaxMessageLength>,
+    pub operation_init_fully_connected_affine: Option<FnGna2OperationInitFullyConnectedAffine>,
 
     pub request_config_create: Option<FnGna2RequestConfigCreate>,
     pub request_config_set_operand_buffer: Option<FnGna2RequestConfigSetOperandBuffer>,
@@ -202,6 +234,15 @@ impl GnaSymbolTable {
             load_required(lib, b"Gna2MemoryFree\0", "Gna2MemoryFree")?;
         let memory_set_tag = load_optional(lib, b"Gna2MemorySetTag\0");
 
+        let model_create = load_optional(lib, b"Gna2ModelCreate\0");
+        let model_release = load_optional(lib, b"Gna2ModelRelease\0");
+        let model_get_last_error = load_optional(lib, b"Gna2ModelGetLastError\0");
+        let model_error_get_message = load_optional(lib, b"Gna2ModelErrorGetMessage\0");
+        let model_error_get_max_message_length =
+            load_optional(lib, b"Gna2ModelErrorGetMaxMessageLength\0");
+        let operation_init_fully_connected_affine =
+            load_optional(lib, b"Gna2OperationInitFullyConnectedAffine\0");
+
         let request_config_create = load_optional(lib, b"Gna2RequestConfigCreate\0");
         let request_config_set_operand_buffer =
             load_optional(lib, b"Gna2RequestConfigSetOperandBuffer\0");
@@ -251,6 +292,12 @@ impl GnaSymbolTable {
             memory_alloc_for_device,
             memory_free,
             memory_set_tag,
+            model_create,
+            model_release,
+            model_get_last_error,
+            model_error_get_message,
+            model_error_get_max_message_length,
+            operation_init_fully_connected_affine,
             request_config_create,
             request_config_set_operand_buffer,
             request_config_enable_active_list,
@@ -275,3 +322,4 @@ impl GnaSymbolTable {
         })
     }
 }
+

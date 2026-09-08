@@ -14,6 +14,11 @@ RustでIntel GNA (Gaussian & Neural Accelerator) のランタイムDLL/共有ラ
   - `GnaLibrary` (DLLハンドル)
   - `GnaDevice` (デバイスオープン/クローズ)
   - `GnaBuffer` (GNAアロケータメモリの確保と自動解放)
+  - `GnaModel` (コンパイル済みモデルのライフサイクル管理)
+- **ゼロフレームワーク対応 (OpenVINO等不要)**:
+  - Rustネイティブでモデルを定義・コンパイルする `GnaModelBuilder`
+  - 全結合層 (`add_fully_connected_affine` / Dense Layer)
+  - モデル構築エラー診断 (`GnaModel::get_last_error_message`)
 
 ## 使い方
 
@@ -66,13 +71,49 @@ use nanai_gna_dll_rs::GnaLibrary;
 let lib = GnaLibrary::load_default()?;
 ```
 
+### 6. 独自モデルの定義・コンパイル・推論
+
+OpenVINO 等の外部フレームワークを使わず、Rust のみで直接 GNA ネットワークを定義して実行できます。
+
+```rust
+use nanai_gna_dll_rs::{
+    GnaDevice, GnaLibrary, GnaModelBuilder, Gna2Tensor, Gna2DataType,
+    GnaRequestConfig, Gna2AccelerationMode
+};
+
+let lib = GnaLibrary::load_default()?;
+let device = GnaDevice::open_first(&lib)?;
+
+// テンソル定義 (入力 16x4, 出力 8x4, 重み 8x16, バイアス 8)
+let input_t = Gna2Tensor::d2(16, 4, Gna2DataType::Int16, input_buf_ptr);
+let output_t = Gna2Tensor::d2(8, 4, Gna2DataType::Int32, output_buf_ptr);
+let weight_t = Gna2Tensor::d2(8, 16, Gna2DataType::Int16, weight_buf_ptr);
+let bias_t = Gna2Tensor::d1(8, Gna2DataType::Int32, bias_buf_ptr);
+
+// モデル構築
+let model = GnaModelBuilder::new()
+    .add_fully_connected_affine(input_t, output_t, weight_t, bias_t, None)
+    .build(&device)?;
+
+// リクエスト設定と実行
+let mut config = GnaRequestConfig::create(&lib, model.id())?;
+unsafe {
+    config.set_operand_buffer(0, 0, input_buf_ptr)?;
+    config.set_operand_buffer(0, 1, output_buf_ptr)?;
+}
+config.set_acceleration_mode(Gna2AccelerationMode::Auto)?;
+
+let req_id = config.enqueue()?;
+config.wait(req_id, 1000)?;
+```
+
 ## CLIデモ
 
 ```bash
 # ヘルプ表示
 cargo run -- --help
 
-# 任意のパスを指定して実行
+# 任意のパスを指定して実行（モデル構築＆推論デモ含む）
 cargo run -- --dll path/to/gna.dll
 
 # 任意の環境変数を指定して実行

@@ -155,6 +155,11 @@ impl GnaRequestConfig {
         Ok(())
     }
 
+    /// Alias for `wait_request`.
+    pub fn wait(&self, request_id: u32, timeout_ms: u32) -> Result<()> {
+        self.wait_request(request_id, timeout_ms)
+    }
+
     /// Get configuration ID.
     pub fn id(&self) -> u32 {
         self.config_id
