@@ -73,7 +73,7 @@ impl GnaLibrary {
         let var_os = var_name.as_ref();
         let var_str = var_os.to_string_lossy().into_owned();
 
-        let val = env::var_os(var_os).ok_or_else(|| GnaError::EnvVarNotSet(var_str))?;
+        let val = env::var_os(var_os).ok_or(GnaError::EnvVarNotSet(var_str))?;
         let path = PathBuf::from(val);
 
         let target_path = if path.is_dir() {

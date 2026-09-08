@@ -31,7 +31,11 @@ impl GnaRequestConfig {
     }
 
     /// Set an operand buffer for this configuration.
-    pub fn set_operand_buffer(
+    ///
+    /// # Safety
+    /// `buffer_ptr` must be a valid pointer to allocated memory of the expected size for the given operation operand,
+    /// and it must remain valid and not be accessed concurrently in an invalid manner during inference execution.
+    pub unsafe fn set_operand_buffer(
         &mut self,
         operation_index: u32,
         operand_index: u32,

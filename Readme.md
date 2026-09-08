@@ -3,6 +3,7 @@
 RustでIntel GNA (Gaussian & Neural Accelerator) のランタイムDLL/共有ライブラリを動的ロード（libloading）して使用するためのライブラリです。
 
 ## 特長
+
 - **ビルド時リンク不要**: 実行時に動的ロードするため、開発環境に事前に GNA の lib/dll を配置・リンクする必要がありません。
 - **柔軟なロードインターフェイス**:
   - 任意のファイルパスからのロード (`load_from_path`)
@@ -17,6 +18,7 @@ RustでIntel GNA (Gaussian & Neural Accelerator) のランタイムDLL/共有ラ
 ## 使い方
 
 ### 1. 任意のファイルパスからロード
+
 ```rust
 use nanai_gna_dll_rs::GnaLibrary;
 
@@ -24,7 +26,9 @@ let lib = GnaLibrary::load_from_path("C:/path/to/gna.dll")?;
 ```
 
 ### 2. 任意の環境変数からロード
+
 指定した環境変数にDLLのファイルパス、またはDLLが配置されているディレクトリパスを設定してロードできます（ディレクトリの場合は `gna.dll` / `libgna.so` が自動補完されます）。
+
 ```rust
 use nanai_gna_dll_rs::GnaLibrary;
 
@@ -32,6 +36,7 @@ let lib = GnaLibrary::load_from_env("CUSTOM_GNA_LIB_PATH")?;
 ```
 
 ### 3. 環境変数またはフォールバックパス
+
 ```rust
 use nanai_gna_dll_rs::GnaLibrary;
 
@@ -39,6 +44,7 @@ let lib = GnaLibrary::load_from_env_or_path("CUSTOM_GNA_LIB_PATH", "fallback/gna
 ```
 
 ### 4. ビルダーによる優先度付き探索
+
 ```rust
 use nanai_gna_dll_rs::GnaLibrary;
 
@@ -52,6 +58,7 @@ let lib = GnaLibrary::builder()
 ```
 
 ### 5. デフォルト検索ルールでのロード
+
 ```rust
 use nanai_gna_dll_rs::GnaLibrary;
 
