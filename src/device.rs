@@ -105,11 +105,7 @@ impl GnaDevice {
 
     /// Allocate a device-bound memory buffer.
     pub fn allocate_buffer(&self, size: usize) -> Result<GnaBuffer> {
-        if self.library.symbols().memory_alloc_for_device.is_some() {
-            GnaBuffer::new_for_device(&self.library, self.index, size)
-        } else {
-            GnaBuffer::new(&self.library, size)
-        }
+        GnaBuffer::new(&self.library, size)
     }
 
     /// Get device index.
@@ -130,8 +126,10 @@ impl GnaDevice {
 
 impl Drop for GnaDevice {
     fn drop(&mut self) {
+        println!("    [DEBUG GnaDevice::drop] Closing device index {}", self.index);
         unsafe {
-            let _ = (self.library.symbols().device_close)(self.index);
+            let status = (self.library.symbols().device_close)(self.index);
+            println!("    [DEBUG GnaDevice::drop] device_close returned status {}", status);
         }
     }
 }

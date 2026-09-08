@@ -9,17 +9,22 @@ use crate::types::{
     GNA2_STATUS_MODEL_ERROR_UNAVAILABLE, GNA2_STATUS_SUCCESS,
 };
 
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn GetProcessHeap() -> *mut c_void;
+    fn HeapAlloc(hHeap: *mut c_void, dwFlags: u32, dwBytes: usize) -> *mut c_void;
+}
+
 /// Custom allocator matching C ABI `void* (*Gna2UserAllocator)(uint32_t size)`
 unsafe extern "C" fn rust_gna2_user_allocator(size: u32) -> *mut c_void {
     if size == 0 {
         return ptr::null_mut();
     }
-    // Allocate 64-byte aligned memory for GNA structures
-    let layout = match std::alloc::Layout::from_size_align(size as usize, 64) {
-        Ok(l) => l,
-        Err(_) => return ptr::null_mut(),
-    };
-    unsafe { std::alloc::alloc_zeroed(layout) as *mut c_void }
+    unsafe {
+        let heap = GetProcessHeap();
+        // HEAP_ZERO_MEMORY = 0x00000008
+        HeapAlloc(heap, 0x00000008, size as usize)
+    }
 }
 
 /// RAII wrapper for a compiled GNA Model handle (`model_id`).
@@ -157,13 +162,14 @@ impl GnaModelBuilder {
         }
 
         let mut operations: Vec<Gna2Operation> = Vec::with_capacity(self.layers.len());
-        // Temporary storage to keep tensor structs stable during Gna2OperationInit calls
+        // Pointers passed into Gna2OperationInitFullyConnectedAffine are stored into op.operands!
+        // We must ensure the Gna2Tensor structs themselves remain at stable memory addresses!
         let mut fca_storage: Vec<(
-            Gna2Tensor,
-            Gna2Tensor,
-            Gna2Tensor,
-            Gna2Tensor,
-            Gna2Tensor,
+            Box<Gna2Tensor>,
+            Box<Gna2Tensor>,
+            Box<Gna2Tensor>,
+            Box<Gna2Tensor>,
+            Box<Gna2Tensor>,
         )> = Vec::new();
 
         for layer in &self.layers {
@@ -175,7 +181,13 @@ impl GnaModelBuilder {
                     biases,
                     activation,
                 } => {
-                    fca_storage.push((*input, *output, *weights, *biases, *activation));
+                    fca_storage.push((
+                        Box::new(*input),
+                        Box::new(*output),
+                        Box::new(*weights),
+                        Box::new(*biases),
+                        Box::new(*activation),
+                    ));
                 }
                 LayerDefinition::Raw(_) => {}
             }
@@ -185,24 +197,34 @@ impl GnaModelBuilder {
         for layer in self.layers.drain(..) {
             match layer {
                 LayerDefinition::FullyConnectedAffine { .. } => {
-                    let (ref mut inp, ref mut out, ref mut w, ref mut b, ref mut act) =
-                        fca_storage[fca_idx];
+                    let (inp, out, w, b, act) =
+                        &mut fca_storage[fca_idx];
                     fca_idx += 1;
 
                     let mut op = Gna2Operation::default();
-                    if let Some(fca_init) = library.symbols().operation_init_fully_connected_affine
-                    {
+                    if true {
+                        let fca_init = library.symbols().operation_init_fully_connected_affine.unwrap();
                         let status = unsafe {
                             fca_init(
                                 &mut op,
                                 rust_gna2_user_allocator,
-                                inp,
-                                out,
-                                w,
-                                b,
-                                act,
+                                inp.as_mut(),
+                                out.as_mut(),
+                                w.as_mut(),
+                                b.as_mut(),
+                                act.as_mut(),
                             )
                         };
+                        println!("    [DEBUG] fca_init returned status {}, operands count: {}", status, op.number_of_operands);
+                        for i in 0..op.number_of_operands as usize {
+                            let tensor_ptr = unsafe { *op.operands.add(i) };
+                            println!("      [DEBUG] operand[{}] ptr: {:p}", i, tensor_ptr);
+                            if !tensor_ptr.is_null() {
+                                let t = unsafe { &*tensor_ptr };
+                                println!("        shape dims: {}, dim[0]: {}, dim[1]: {}, mode: {:?}, type: {:?}, data: {:p}",
+                                    t.shape.number_of_dimensions, t.shape.dimensions[0], t.shape.dimensions[1], t.mode, t.data_type, t.data);
+                            }
+                        }
                         if status != GNA2_STATUS_SUCCESS {
                             return Err(GnaError::from_status(status));
                         }
@@ -217,11 +239,11 @@ impl GnaModelBuilder {
                             if mem.is_null() {
                                 return Err(GnaError::NullPointer);
                             }
-                            *mem.add(0) = inp as *const Gna2Tensor;
-                            *mem.add(1) = out as *const Gna2Tensor;
-                            *mem.add(2) = w as *const Gna2Tensor;
-                            *mem.add(3) = b as *const Gna2Tensor;
-                            *mem.add(4) = act as *const Gna2Tensor;
+                            *mem.add(0) = inp.as_ref() as *const Gna2Tensor;
+                            *mem.add(1) = out.as_ref() as *const Gna2Tensor;
+                            *mem.add(2) = w.as_ref() as *const Gna2Tensor;
+                            *mem.add(3) = b.as_ref() as *const Gna2Tensor;
+                            *mem.add(4) = act.as_ref() as *const Gna2Tensor;
                             mem
                         };
                         op.operands = operands_buf;
@@ -242,8 +264,13 @@ impl GnaModelBuilder {
             operations: operations.as_mut_ptr(),
         };
 
+        println!("    [DEBUG] Preparing to call Gna2ModelCreate with {} operations", operations.len());
+        println!("    [DEBUG] Operation[0] type: {:?}, operands count: {}, operands ptr: {:p}", 
+            operations[0].operation_type, operations[0].number_of_operands, operations[0].operands);
         let mut model_id: u32 = u32::MAX;
+        println!("    [DEBUG] Invoking model_create on device {}", device.index());
         let status = unsafe { model_create(device.index(), &model_raw, &mut model_id) };
+        println!("    [DEBUG] model_create returned status {}", status);
 
         if status != GNA2_STATUS_SUCCESS {
             let detail = GnaModel::get_last_error_message(library).unwrap_or_else(|| {

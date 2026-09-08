@@ -4,14 +4,11 @@ cargo-features = ["codegen-backend"]
 name = "nanai-gna-dll-rs"
 version = "0.1.0"
 edition = "2024"
+autobins = false
 
 [lib]
 name = "nanai_gna_dll_rs"
 path = "src/lib.rs"
-
-[[bin]]
-name = "nanai-gna-dll-rs"
-path = "src/main.rs"
 
 [dependencies]
 libloading = "0.9.0"

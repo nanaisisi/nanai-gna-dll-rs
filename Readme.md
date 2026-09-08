@@ -129,7 +129,7 @@ let mut monitor = GnaUsageMonitor::new();
 for _ in 0..10 {
     let req_id = config.enqueue()?;
     config.wait(req_id, 1000)?;
-    
+
     if let Ok(stats) = config.get_performance_stats() {
         monitor.record(&stats);
     }
@@ -161,20 +161,20 @@ report.print_summary();
 
 ```bash
 # ヘルプ表示
-cargo run -- --help
+cargo run --example gna_demo -- --help
 
 # 任意のパスを指定して実行（モデル構築＆推論デモ含む）
-cargo run -- --dll path/to/gna.dll
+cargo run --example gna_demo -- --dll path/to/gna.dll
 
 # 任意の環境変数を指定して実行
-cargo run -- --env MY_GNA_LIB_PATH
+cargo run --example gna_demo -- --env MY_GNA_LIB_PATH
 
 # 負荷テスト（1,000回連続推論）
-cargo run -- --stress 1000
+cargo run --example gna_demo -- --stress 1000
 
 # 負荷テスト（5秒間・同時キュー深度2で最大スループット計測）
-cargo run -- --duration 5 --concurrency 2
+cargo run --example gna_demo -- --duration 5 --concurrency 2
 
 # デフォルト探索
-cargo run
+cargo run --example gna_demo
 ```

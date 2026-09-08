@@ -137,8 +137,10 @@ impl DerefMut for GnaBuffer {
 
 impl Drop for GnaBuffer {
     fn drop(&mut self) {
+        println!("    [DEBUG GnaBuffer::drop] Calling memory_free({:p})", self.as_raw_ptr());
         unsafe {
-            (self.library.symbols().memory_free)(self.as_raw_ptr());
+            let status = (self.library.symbols().memory_free)(self.as_raw_ptr());
+            println!("    [DEBUG GnaBuffer::drop] memory_free returned status {}", status);
         }
     }
 }
