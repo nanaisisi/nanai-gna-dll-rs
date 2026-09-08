@@ -139,6 +139,24 @@ println!("推論回数: {}", monitor.inference_count());
 println!("累積平均使用率: {:.2}%", monitor.cumulative_hw_usage_percentage());
 ```
 
+### 8. 負荷テスト・ストレステスト (`GnaLoadTester`)
+
+連続した推論リクエストや指定時間内の高負荷実行（スループット IPS、レイテンシ、キュー深度、HW使用率）を自動計測します。
+
+```rust
+use std::time::Duration;
+use nanai_gna_dll_rs::{GnaLoadTester, GnaLoadTestConfig};
+
+let config = GnaLoadTestConfig::new()
+    .with_iterations(1000)       // 1000回連続実行 (または .with_duration(Duration::from_secs(5)))
+    .with_concurrency(2)         // キュー深度（パイプライン同時発行数）
+    .with_track_hw_usage(true);  // ハードウェア使用率も集計
+
+let tester = GnaLoadTester::new(config);
+let report = tester.run(&mut request_config)?;
+report.print_summary();
+```
+
 ## CLIデモ
 
 ```bash
@@ -150,6 +168,12 @@ cargo run -- --dll path/to/gna.dll
 
 # 任意の環境変数を指定して実行
 cargo run -- --env MY_GNA_LIB_PATH
+
+# 負荷テスト（1,000回連続推論）
+cargo run -- --stress 1000
+
+# 負荷テスト（5秒間・同時キュー深度2で最大スループット計測）
+cargo run -- --duration 5 --concurrency 2
 
 # デフォルト探索
 cargo run

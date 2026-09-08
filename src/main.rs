@@ -7,9 +7,12 @@ fn print_usage(program: &str) {
     println!("Usage: {} [OPTIONS]", program);
     println!();
     println!("Options:");
-    println!("  --dll <PATH>       Load DLL directly from specified file or directory path");
-    println!("  --env <VAR_NAME>   Load DLL from specified environment variable");
-    println!("  --help, -h         Show this help message");
+    println!("  --dll <PATH>               Load DLL directly from specified file or directory path");
+    println!("  --env <VAR_NAME>           Load DLL from specified environment variable");
+    println!("  --stress [ITERATIONS]      Run stress load test (default: 1000 iterations)");
+    println!("  --duration <SECS>          Run stress load test for specified duration in seconds");
+    println!("  --concurrency <N>          Queue depth / in-flight requests for stress test (default: 1)");
+    println!("  --help, -h                 Show this help message");
     println!();
     println!("If no option is specified, standard search order is used:");
     println!("  1. GNA_LIB_PATH environment variable");
@@ -28,6 +31,10 @@ fn main() {
 
     let mut dll_path: Option<PathBuf> = None;
     let mut env_var: Option<String> = None;
+    let mut stress_test = false;
+    let mut stress_iterations: Option<usize> = None;
+    let mut stress_duration_secs: Option<u64> = None;
+    let mut stress_concurrency: usize = 1;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -47,6 +54,52 @@ fn main() {
                     return;
                 }
             }
+            "--stress" => {
+                stress_test = true;
+                // Check if next arg is a number of iterations
+                if let Some(val) = args.next() {
+                    if let Ok(n) = val.parse::<usize>() {
+                        stress_iterations = Some(n);
+                    } else if val.starts_with('-') {
+                        // It was another option, continue parsing with it
+                        // Since we already advanced, handle it manually
+                        // Alternatively, default to 1000 and handle the flag
+                    } else {
+                        stress_iterations = Some(1000);
+                    }
+                } else {
+                    stress_iterations = Some(1000);
+                }
+            }
+            "--duration" => {
+                stress_test = true;
+                if let Some(val) = args.next() {
+                    match val.parse::<u64>() {
+                        Ok(sec) => stress_duration_secs = Some(sec),
+                        Err(_) => {
+                            eprintln!("Error: --duration requires integer seconds.");
+                            return;
+                        }
+                    }
+                } else {
+                    eprintln!("Error: --duration requires integer seconds.");
+                    return;
+                }
+            }
+            "--concurrency" => {
+                if let Some(val) = args.next() {
+                    match val.parse::<usize>() {
+                        Ok(c) => stress_concurrency = c.max(1),
+                        Err(_) => {
+                            eprintln!("Error: --concurrency requires a positive integer.");
+                            return;
+                        }
+                    }
+                } else {
+                    eprintln!("Error: --concurrency requires an integer value.");
+                    return;
+                }
+            }
             "--help" | "-h" => {
                 print_usage(&program);
                 return;
@@ -57,7 +110,6 @@ fn main() {
                 return;
             }
             positional => {
-                // Allow passing the DLL path directly as a positional argument
                 dll_path = Some(PathBuf::from(positional));
             }
         }
@@ -122,7 +174,7 @@ fn main() {
                         }
 
                         println!("\n[2] Building and running a custom Dense (Fully Connected Affine) model...");
-                        run_model_demo(&device);
+                        run_model_demo(&device, stress_test, stress_iterations, stress_duration_secs, stress_concurrency);
 
                         println!("\n[3] Dropping GnaDevice (device #0) now...");
                     }
@@ -145,10 +197,17 @@ fn round_up(val: usize, align: usize) -> usize {
     (val + align - 1) & !(align - 1)
 }
 
-fn run_model_demo(device: &GnaDevice) {
+fn run_model_demo(
+    device: &GnaDevice,
+    stress_test: bool,
+    stress_iterations: Option<usize>,
+    stress_duration_secs: Option<u64>,
+    stress_concurrency: usize,
+) {
+    use std::time::Duration;
     use nanai_gna_dll_rs::{
-        Gna2AccelerationMode, Gna2DataType, Gna2Tensor, GnaBuffer, GnaModelBuilder,
-        GnaRequestConfig,
+        Gna2AccelerationMode, Gna2DataType, Gna2Tensor, GnaBuffer, GnaLoadTestConfig,
+        GnaLoadTester, GnaModelBuilder, GnaRequestConfig,
     };
 
     const W: usize = 16;
@@ -261,6 +320,37 @@ fn run_model_demo(device: &GnaDevice) {
     }
 
     let _ = request_config.set_acceleration_mode(Gna2AccelerationMode::Auto);
+
+    if stress_test {
+        println!("\n  >>> Running Stress / Load Test <<<");
+        let mut load_config = GnaLoadTestConfig::new()
+            .with_concurrency(stress_concurrency);
+
+        if let Some(sec) = stress_duration_secs {
+            println!("  Load test mode: Time-based ({} seconds), Concurrency: {}", sec, stress_concurrency);
+            load_config = load_config.with_duration(Duration::from_secs(sec));
+            if stress_iterations.is_some() {
+                load_config.iterations = stress_iterations;
+            } else {
+                load_config.iterations = None;
+            }
+        } else {
+            let iters = stress_iterations.unwrap_or(1000);
+            println!("  Load test mode: Iterations-based ({} runs), Concurrency: {}", iters, stress_concurrency);
+            load_config = load_config.with_iterations(iters);
+        }
+
+        let tester = GnaLoadTester::new(load_config);
+        match tester.run(&mut request_config) {
+            Ok(report) => {
+                println!();
+                report.print_summary();
+            }
+            Err(err) => eprintln!("  Stress test failed: {}", err),
+        }
+        return;
+    }
+
     if let Err(e) = request_config.enable_performance_counter() {
         println!("  (Performance counter not available or disabled: {})", e);
     }

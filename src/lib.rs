@@ -6,6 +6,7 @@ pub mod loader;
 pub mod memory;
 pub mod model;
 pub mod model_export;
+pub mod stress;
 pub mod symbol_table;
 pub mod types;
 
@@ -18,6 +19,7 @@ pub use loader::{GnaLibrary, GnaLibraryBuilder};
 pub use memory::GnaBuffer;
 pub use model::{GnaModel, GnaModelBuilder};
 pub use model_export::GnaModelExportConfig;
+pub use stress::{GnaLoadTestConfig, GnaLoadTestReport, GnaLoadTester};
 pub use types::{
     Gna2AccelerationMode, Gna2BiasMode, Gna2DataType, Gna2DeviceGeneration, Gna2DeviceVersion,
     Gna2ErrorType, Gna2InstrumentationMode, Gna2InstrumentationPoint, Gna2InstrumentationUnit,
