@@ -1,13 +1,17 @@
 use std::ffi::c_void;
 
 use crate::error::{GnaError, Result};
+use crate::instrumentation::{GnaInstrumentationConfig, GnaPerformanceStats};
 use crate::loader::GnaLibrary;
-use crate::types::{Gna2AccelerationMode, GNA2_STATUS_SUCCESS};
+use crate::types::{
+    Gna2AccelerationMode, Gna2InstrumentationPoint, Gna2InstrumentationUnit, GNA2_STATUS_SUCCESS,
+};
 
 /// High-level wrapper for GNA Request Configuration.
 pub struct GnaRequestConfig {
     library: GnaLibrary,
     config_id: u32,
+    instrumentation: Option<GnaInstrumentationConfig>,
 }
 
 impl GnaRequestConfig {
@@ -27,6 +31,7 @@ impl GnaRequestConfig {
         Ok(Self {
             library: library.clone(),
             config_id,
+            instrumentation: None,
         })
     }
 
@@ -158,6 +163,53 @@ impl GnaRequestConfig {
     /// Alias for `wait_request`.
     pub fn wait(&self, request_id: u32, timeout_ms: u32) -> Result<()> {
         self.wait_request(request_id, timeout_ms)
+    }
+
+    /// Attach a custom instrumentation configuration to this request.
+    pub fn attach_instrumentation(&mut self, instrumentation: GnaInstrumentationConfig) -> Result<()> {
+        instrumentation.assign_to_request_config(self.config_id)?;
+        self.instrumentation = Some(instrumentation);
+        Ok(())
+    }
+
+    /// Enable performance counters for hardware usage measurement (`HwTotalCycles`, `HwStallCycles`, and `LibExecution`).
+    ///
+    /// This automatically creates and assigns a `GnaInstrumentationConfig` with cycle units.
+    pub fn enable_performance_counter(&mut self) -> Result<()> {
+        let points = [
+            Gna2InstrumentationPoint::HwTotalCycles,
+            Gna2InstrumentationPoint::HwStallCycles,
+            Gna2InstrumentationPoint::LibExecution,
+        ];
+        let mut inst = GnaInstrumentationConfig::create(&self.library, &points)?;
+        let _ = inst.set_unit(Gna2InstrumentationUnit::Cycles);
+        inst.assign_to_request_config(self.config_id)?;
+        self.instrumentation = Some(inst);
+        Ok(())
+    }
+
+    /// Get a reference to the attached instrumentation configuration, if any.
+    pub fn instrumentation(&self) -> Option<&GnaInstrumentationConfig> {
+        self.instrumentation.as_ref()
+    }
+
+    /// Compute hardware usage ratio `[0.0, 1.0]` from the last execution.
+    ///
+    /// Requires `enable_performance_counter` or an instrumentation config containing
+    /// `HwTotalCycles` and `HwStallCycles` to have been configured.
+    pub fn get_hw_usage(&self) -> Result<f64> {
+        let inst = self.instrumentation.as_ref().ok_or_else(|| {
+            GnaError::Other("No instrumentation configured for request. Call enable_performance_counter() first.".into())
+        })?;
+        inst.compute_hw_usage()
+    }
+
+    /// Get detailed performance statistics (`GnaPerformanceStats`) from the last execution.
+    pub fn get_performance_stats(&self) -> Result<GnaPerformanceStats> {
+        let inst = self.instrumentation.as_ref().ok_or_else(|| {
+            GnaError::Other("No instrumentation configured for request. Call enable_performance_counter() first.".into())
+        })?;
+        inst.compute_performance_stats()
     }
 
     /// Get configuration ID.

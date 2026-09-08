@@ -261,6 +261,9 @@ fn run_model_demo(device: &GnaDevice) {
     }
 
     let _ = request_config.set_acceleration_mode(Gna2AccelerationMode::Auto);
+    if let Err(e) = request_config.enable_performance_counter() {
+        println!("  (Performance counter not available or disabled: {})", e);
+    }
 
     println!("  Enqueuing inference request...");
     let req_id = match request_config.enqueue() {
@@ -277,6 +280,18 @@ fn run_model_demo(device: &GnaDevice) {
         Err(e) => {
             eprintln!("  Inference failed / timed out: {}", e);
             return;
+        }
+    }
+
+    // Report performance statistics if available
+    if let Ok(stats) = request_config.get_performance_stats() {
+        println!("  Inference Performance Metrics:");
+        println!("    Total Cycles:   {}", stats.total_cycles);
+        println!("    Stall Cycles:   {}", stats.stall_cycles);
+        println!("    Active Cycles:  {}", stats.active_cycles);
+        println!("    HW Utilization: {:.2}%", stats.hw_usage_percentage());
+        if let Some(t) = stats.execution_time {
+            println!("    Execution Time: {} cycles/us", t);
         }
     }
 

@@ -95,7 +95,6 @@ let model = GnaModelBuilder::new()
     .add_fully_connected_affine(input_t, output_t, weight_t, bias_t, None)
     .build(&device)?;
 
-// リクエスト設定と実行
 let mut config = GnaRequestConfig::create(&lib, model.id())?;
 unsafe {
     config.set_operand_buffer(0, 0, input_buf_ptr)?;
@@ -103,8 +102,41 @@ unsafe {
 }
 config.set_acceleration_mode(Gna2AccelerationMode::Auto)?;
 
+// パフォーマンスカウンタ（ハードウェア使用率・サイクル数）の有効化
+config.enable_performance_counter()?;
+
 let req_id = config.enqueue()?;
 config.wait(req_id, 1000)?;
+
+// ハードウェア使用率 (0.0〜1.0) および詳細統計の取得
+let usage = config.get_hw_usage()?;
+println!("Hardware usage: {:.2}%", usage * 100.0);
+
+let stats = config.get_performance_stats()?;
+println!("Total: {} cycles, Stall: {} cycles", stats.total_cycles, stats.stall_cycles);
+```
+
+### 7. 継続的な使用率モニタリング (`GnaUsageMonitor`)
+
+複数回の推論リクエストにわたるハードウェア使用率の移動・累積統計（総稼働サイクル、ストールサイクル、加重平均稼働率）を追跡できます。
+
+```rust
+use nanai_gna_dll_rs::GnaUsageMonitor;
+
+let mut monitor = GnaUsageMonitor::new();
+
+// 推論ループ内で記録
+for _ in 0..10 {
+    let req_id = config.enqueue()?;
+    config.wait(req_id, 1000)?;
+    
+    if let Ok(stats) = config.get_performance_stats() {
+        monitor.record(&stats);
+    }
+}
+
+println!("推論回数: {}", monitor.inference_count());
+println!("累積平均使用率: {:.2}%", monitor.cumulative_hw_usage_percentage());
 ```
 
 ## CLIデモ

@@ -13,7 +13,7 @@ pub mod types;
 pub use device::GnaDevice;
 pub use error::{GnaError, Result};
 pub use inference::GnaRequestConfig;
-pub use instrumentation::GnaInstrumentationConfig;
+pub use instrumentation::{GnaInstrumentationConfig, GnaPerformanceStats, GnaUsageMonitor};
 pub use loader::{GnaLibrary, GnaLibraryBuilder};
 pub use memory::GnaBuffer;
 pub use model::{GnaModel, GnaModelBuilder};
