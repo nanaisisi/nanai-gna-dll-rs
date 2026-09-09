@@ -1,13 +1,13 @@
 cargo-features = ["codegen-backend"]
 
 [package]
-name = "nanai-gna-dll"
+name = "nanai-gna-dll-load"
 version = "0.1.0"
 edition = "2024"
 autobins = false
 
 [lib]
-name = "nanai_gna_dll"
+name = "nanai_gna_dll_load"
 path = "src/lib.rs"
 
 [dependencies]
